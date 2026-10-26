@@ -6,7 +6,23 @@ const allowedOrigins = new Set([
   ...configuredOrigins,
   "http://localhost:8080",
   "http://127.0.0.1:8080",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
 ]);
+
+function isAllowedOrigin(origin: string | null) {
+  if (!origin) return false;
+  if (allowedOrigins.has(origin)) return true;
+
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    return hostname.endsWith(".vercel.app") || hostname.endsWith(".vercel-preview.com");
+  } catch {
+    return false;
+  }
+}
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabasePublicKey =
   Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
@@ -112,7 +128,7 @@ async function isAuthenticatedAdmin(request: Request) {
 
 Deno.serve(async (request) => {
   const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.has(origin)) {
+  if (!origin || !isAllowedOrigin(origin)) {
     return new Response("Origin is not allowed", { status: 403 });
   }
 
