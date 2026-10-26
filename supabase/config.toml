@@ -1,0 +1,7 @@
+project_id = "pocket-directory-compass"
+
+[functions.device-analytics]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = false
