@@ -66,10 +66,87 @@ async function adminRequest(path: string, init: RequestInit = {}) {
   return readResponse(response);
 }
 
+async function adminStorageRequest(path: string, init: RequestInit = {}) {
+  const { url, key } = getSupabaseApiConfig();
+  const accessToken = await getAdminAccessToken();
+  if (!accessToken) throw new Error("Une session administrateur est nécessaire pour gérer les photos.");
+
+  const response = await fetch(`${url}/storage/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+      ...(init.headers ?? {}),
+    },
+  });
+  return readResponse(response);
+}
+
+export function getPublicListingPhotoUrl(storagePath: string) {
+  const { url } = getSupabaseApiConfig();
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `${url}/storage/v1/object/public/listing-photos/${encodedPath}`;
+}
+
+export function validateListingPhoto(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("Choisis une image au format JPEG, PNG ou WebP.");
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error("La photo ne peut pas dépasser 5 Mo.");
+}
+
+export async function saveAdminListingPhoto(
+  listingId: string,
+  file: File,
+  listingName: string,
+  previousStoragePath?: string,
+) {
+  const extensions: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+  };
+  validateListingPhoto(file);
+  const extension = extensions[file.type];
+  if (!extension) throw new Error("Choisis une image au format JPEG, PNG ou WebP.");
+
+  const storagePath = `${listingId}/${crypto.randomUUID()}.${extension}`;
+  await adminStorageRequest(`object/listing-photos/${storagePath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type,
+      "x-upsert": "false",
+    },
+    body: file,
+  });
+
+  await adminRequest("listing_photos", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      listing_id: listingId,
+      storage_path: storagePath,
+      alt_text: `Photo de ${listingName}`,
+      sort_order: 0,
+    }),
+  });
+
+  if (previousStoragePath) {
+    await adminRequest(toQuery("listing_photos", { storage_path: `eq.${previousStoragePath}` }), {
+      method: "DELETE",
+    });
+    await adminStorageRequest("object/listing-photos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: [previousStoragePath] }),
+    });
+  }
+}
+
 export async function fetchPublicListings() {
   return assertRows(
     await publicRequest(toQuery("public_listing_details", {
-      select: "id,name,category_id,subcategory_name,description,commune,quartier,hours,languages,payments,average_rating,reviews_count,is_example",
+      select: "id,name,category_id,subcategory_name,description,commune,quartier,hours,languages,payments,average_rating,reviews_count,is_example,cover_image_path",
       order: "name.asc",
     })),
     "l’annuaire",
@@ -315,12 +392,18 @@ export async function createAdminListing(
 }
 
 export async function fetchAdminListingDetails(id: string) {
-  const [listing, hours, payments, languages, keywords] = await Promise.all([
+  const [listing, hours, payments, languages, keywords, photos] = await Promise.all([
     adminRequest(toQuery("admin_listings", { select: "*", id: `eq.${id}`, limit: "1" })),
     adminRequest(toQuery("listing_hours", { select: "*", listing_id: `eq.${id}`, order: "day_of_week.asc" })),
     adminRequest(toQuery("listing_payments", { select: "payment_method", listing_id: `eq.${id}` })),
     adminRequest(toQuery("listing_languages", { select: "language", listing_id: `eq.${id}` })),
     adminRequest(toQuery("listing_keywords", { select: "keyword", listing_id: `eq.${id}` })),
+    adminRequest(toQuery("listing_photos", {
+      select: "storage_path",
+      listing_id: `eq.${id}`,
+      order: "created_at.desc",
+      limit: "1",
+    })),
   ]);
   const listingRow = assertRows(listing, "la fiche à modifier")[0];
   if (!listingRow) throw new Error("La fiche à modifier est introuvable.");
@@ -330,6 +413,7 @@ export async function fetchAdminListingDetails(id: string) {
     payments: assertRows(payments, "les paiements de la fiche"),
     languages: assertRows(languages, "les langues de la fiche"),
     keywords: assertRows(keywords, "les mots-clés de la fiche"),
+    photo: assertRows(photos, "la photo de la fiche")[0] ?? null,
   };
 }
 

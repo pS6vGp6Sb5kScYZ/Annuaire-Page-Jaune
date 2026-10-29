@@ -6,6 +6,7 @@ export type Listing = {
   category: string;
   subcategory: string;
   description: string;
+  imageUrl?: string;
   address: string;
   commune: string;
   quartier: string;

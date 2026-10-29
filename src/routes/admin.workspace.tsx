@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BriefcaseBusiness, CalendarDays, CheckCircle2, Clock3, CreditCard, Eye, EyeOff, Languages, Pencil, RefreshCw, Store, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CheckCircle2, Clock3, CreditCard, Eye, EyeOff, ImagePlus, Languages, Pencil, RefreshCw, Store, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { AdminWorkspaceLayout } from "@/components/admin/admin-workspace-layout";
 import { AdminUserManagement } from "@/components/admin/admin-user-management";
@@ -17,10 +17,13 @@ import {
   fetchAdminJobs,
   fetchAdminListings,
   fetchListingTaxonomy,
+  getPublicListingPhotoUrl,
+  saveAdminListingPhoto,
   setAdminListingStatus,
   updateAdminEvent,
   updateAdminJob,
   updateAdminListing,
+  validateListingPhoto,
   type SupabaseRow,
 } from "@/lib/supabase-data";
 
@@ -178,6 +181,10 @@ function AdminWorkspacePage() {
   const [jobs, setJobs] = useState<SupabaseRow[]>([]);
   const [taxonomy, setTaxonomy] = useState<{ categories: SupabaseRow[]; subcategories: SupabaseRow[] }>({ categories: [], subcategories: [] });
   const [listingForm, setListingForm] = useState(initialListingForm);
+  const [listingPhotoFile, setListingPhotoFile] = useState<File | null>(null);
+  const [listingPhotoPath, setListingPhotoPath] = useState("");
+  const [listingPhotoPreview, setListingPhotoPreview] = useState("");
+  const [listingPhotoInputKey, setListingPhotoInputKey] = useState(0);
   const [eventForm, setEventForm] = useState(initialEventForm);
   const [jobForm, setJobForm] = useState(initialJobForm);
   const [hours, setHours] = useState(() => weekdays.map((_, day_of_week) => ({
@@ -195,6 +202,17 @@ function AdminWorkspacePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (!listingPhotoFile) {
+      setListingPhotoPreview("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(listingPhotoFile);
+    setListingPhotoPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [listingPhotoFile]);
 
   const refresh = useCallback(async () => {
     setError("");
@@ -247,6 +265,9 @@ function AdminWorkspacePage() {
         };
       });
       setEditingListingId(id);
+      setListingPhotoFile(null);
+      setListingPhotoInputKey((key) => key + 1);
+      setListingPhotoPath(text(details.photo ?? {}, "storage_path"));
       setListingForm({
         name: text(row, "name"),
         category_id: text(row, "category_id"),
@@ -328,6 +349,7 @@ function AdminWorkspacePage() {
     setError("");
     setNotice("");
     try {
+      if (listingPhotoFile) validateListingPhoto(listingPhotoFile);
       const schedule = hours.flatMap((hour) => {
         if (hour.is_closed) return [{ ...hour, opens_at: null, closes_at: null }];
         if (!hour.opens_at && !hour.closes_at) return [];
@@ -353,18 +375,26 @@ function AdminWorkspacePage() {
         website: listingForm.website,
         social_links: { facebook: listingForm.facebook, instagram: listingForm.instagram },
       };
-      const savedId = editingListingId;
+      const wasEditing = Boolean(editingListingId);
+      let savedId = editingListingId;
       if (savedId) {
         await updateAdminListing(savedId, listing, schedule, payments, languages, keywords);
       } else {
-        await createAdminListing(listing, schedule, payments, languages, keywords);
+        savedId = await createAdminListing(listing, schedule, payments, languages, keywords);
+        setEditingListingId(savedId);
+      }
+      if (listingPhotoFile) {
+        await saveAdminListingPhoto(savedId, listingPhotoFile, listingForm.name.trim(), listingPhotoPath || undefined);
       }
       setEditingListingId("");
       setListingForm(initialListingForm);
+      setListingPhotoFile(null);
+      setListingPhotoPath("");
+      setListingPhotoInputKey((key) => key + 1);
       setHours(weekdays.map((_, day_of_week) => ({ day_of_week, is_closed: false, opens_at: "", closes_at: "" })));
       setPayments([]);
       setLanguages([]);
-      setNotice(savedId ? "Fiche mise à jour." : "Fiche publiée avec succès.");
+      setNotice(wasEditing ? "Fiche mise à jour." : "Fiche publiée avec succès.");
       await refresh();
     } catch (cause) {
       console.error("Unable to save public listing", cause);
@@ -551,6 +581,9 @@ function AdminWorkspacePage() {
       if (editingListingId === text(row, "id")) {
         setEditingListingId("");
         setListingForm(initialListingForm);
+        setListingPhotoFile(null);
+        setListingPhotoPath("");
+        setListingPhotoInputKey((key) => key + 1);
         setHours(weekdays.map((_, day_of_week) => ({ day_of_week, is_closed: false, opens_at: "", closes_at: "" })));
         setPayments([]);
         setLanguages([]);
@@ -639,6 +672,30 @@ function AdminWorkspacePage() {
         <SectionTitle icon={Store} title="Annuaire" description="Chaque ligne est un établissement enregistré. Crée une fiche réelle, modifie-la, publie-la, masque-la ou supprime-la." count={`${listings.length} fiche${listings.length === 1 ? "" : "s"}`} />
         <form onSubmit={submitListing} className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Field label="Nom de l’établissement"><input required minLength={2} maxLength={180} value={listingForm.name} onChange={(e) => setListingForm({ ...listingForm, name: e.target.value })} className={inputClass} /></Field>
+          <Field label="Photo de l’établissement (JPEG, PNG ou WebP, max. 5 Mo)">
+            <input
+              key={listingPhotoInputKey}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => setListingPhotoFile(event.currentTarget.files?.[0] ?? null)}
+              className={`${inputClass} h-auto py-2`}
+            />
+            {(listingPhotoPreview || listingPhotoPath) && (
+              <img
+                src={listingPhotoPreview || getPublicListingPhotoUrl(listingPhotoPath)}
+                alt="Aperçu de la photo de l’établissement"
+                className="mt-2 h-24 w-24 object-cover"
+              />
+            )}
+            <span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <ImagePlus className="h-3.5 w-3.5" />
+              {listingPhotoFile
+                ? "La nouvelle photo remplacera la photo actuelle lors de l’enregistrement."
+                : listingPhotoPath
+                  ? "Photo actuelle — sélectionne une image pour la remplacer."
+                  : "Cette photo sera affichée sur la fiche."}
+            </span>
+          </Field>
           <Field label="Catégorie"><select required value={listingForm.category_id} onChange={(e) => setListingForm({ ...listingForm, category_id: e.target.value, subcategory_id: "" })} className={inputClass}><option value="">Choisir…</option>{taxonomy.categories.map((item) => <option key={text(item, "id")} value={text(item, "id")}>{text(item, "name")}</option>)}</select></Field>
           <Field label="Sous-catégorie"><select required value={listingForm.subcategory_id} onChange={(e) => setListingForm({ ...listingForm, subcategory_id: e.target.value })} className={inputClass}><option value="">Choisir…</option>{filteredSubcategories.map((item) => <option key={text(item, "id")} value={text(item, "id")}>{text(item, "name")}</option>)}</select></Field>
           <Field label="Description"><textarea maxLength={4000} value={listingForm.description} onChange={(e) => setListingForm({ ...listingForm, description: e.target.value })} className={`${inputClass} h-24 py-2`} /></Field>
@@ -731,7 +788,7 @@ function AdminWorkspacePage() {
             <p className="text-xs font-semibold">Prêt à enregistrer ?</p>
             <p className="mb-1 text-[11px] leading-relaxed text-muted-foreground">Vérifie les informations de l’établissement avant de confirmer.</p>
             <button type="submit" disabled={saving || loading} className="h-11 w-full border border-primary bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Enregistrement…" : editingListingId ? "Enregistrer les modifications" : "Créer et publier la fiche"}</button>
-            {editingListingId && <button type="button" disabled={saving} onClick={() => { setEditingListingId(""); setListingForm(initialListingForm); setHours(weekdays.map((_, day_of_week) => ({ day_of_week, is_closed: false, opens_at: "", closes_at: "" }))); setPayments([]); setLanguages([]); }} className="h-10 border border-border bg-card px-3 text-xs font-medium transition hover:bg-muted">Annuler les modifications</button>}
+            {editingListingId && <button type="button" disabled={saving} onClick={() => { setEditingListingId(""); setListingForm(initialListingForm); setListingPhotoFile(null); setListingPhotoPath(""); setListingPhotoInputKey((key) => key + 1); setHours(weekdays.map((_, day_of_week) => ({ day_of_week, is_closed: false, opens_at: "", closes_at: "" }))); setPayments([]); setLanguages([]); }} className="h-10 border border-border bg-card px-3 text-xs font-medium transition hover:bg-muted">Annuler les modifications</button>}
           </div>
         </form>
         <DataTable headers={["Établissement", "Commune", "Statut", "Modifier", "Visibilité", "Supprimer"]} rows={listings.map((row) => [

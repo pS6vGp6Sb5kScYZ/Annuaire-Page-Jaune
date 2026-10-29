@@ -101,7 +101,7 @@ function Fiche() {
   return (
     <AppShell>
       <div className="relative">
-        <PhotoSlot label={l.name} className="h-64 border-b border-border/50" />
+        <PhotoSlot label={l.name} imageUrl={l.imageUrl} className="h-64 border-b border-border/50" />
         <div className="absolute inset-x-0 top-0 flex justify-between p-4">
           <button onClick={() => router.history.back()} aria-label="Retour" className="glass-surface grid h-11 w-11 place-items-center rounded-full text-foreground">
             <ArrowLeft className="h-5 w-5" />
@@ -110,9 +110,6 @@ function Fiche() {
             <button onClick={share} aria-label="Partager" className="glass-surface grid h-11 w-11 place-items-center rounded-full text-foreground"><Share2 className="h-5 w-5" /></button>
             <button aria-label="Ajouter aux favoris" className="glass-surface grid h-11 w-11 place-items-center rounded-full text-foreground"><Heart className="h-5 w-5" /></button>
           </div>
-        </div>
-        <div className="absolute bottom-10 left-4 flex gap-2">
-          {[1, 2, 3].map((i) => <PhotoSlot key={i} label={`${l.name} ${i}`} className="h-12 w-12 rounded-lg border-2 border-card p-0 [&>span]:hidden" />)}
         </div>
       </div>
 

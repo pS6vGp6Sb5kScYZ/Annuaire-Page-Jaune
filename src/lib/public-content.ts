@@ -1,6 +1,6 @@
 import type { AgendaEvent } from "@/routes/agenda";
 import type { Listing, Payment } from "@/data/listings";
-import type { SupabaseRow } from "@/lib/supabase-data";
+import { getPublicListingPhotoUrl, type SupabaseRow } from "@/lib/supabase-data";
 
 const PAYMENT_LABELS: Record<string, Payment> = {
   cash: "Cash",
@@ -114,6 +114,7 @@ export function mapPublicListing(row: SupabaseRow): Listing {
     category: text(row.category_id),
     subcategory: text(row.subcategory_name),
     description: text(row.description),
+    ...(text(row.cover_image_path) ? { imageUrl: getPublicListingPhotoUrl(text(row.cover_image_path)) } : {}),
     address: text(row.address),
     commune: text(row.commune),
     quartier: text(row.quartier),

@@ -33,7 +33,7 @@ export function Pill({ kind, children }: { kind: BadgeKind; children?: ReactNode
 }
 
 /** Illustration locale de Lubumbashi utilisée tant qu'aucune photo propre à la fiche n'existe. */
-export function PhotoSlot({ label, className }: { label: string; className?: string }) {
+export function PhotoSlot({ label, className, imageUrl }: { label: string; className?: string; imageUrl?: string }) {
   return (
     <div
       role="img"
@@ -41,7 +41,7 @@ export function PhotoSlot({ label, className }: { label: string; className?: str
       className={cn("bg-cover bg-center", className)}
       style={{
         backgroundImage:
-          `linear-gradient(0deg, rgb(0 0 0 / 55%), rgb(0 0 0 / 5%) 70%), url("${lubumbashiImage}")`,
+          `linear-gradient(0deg, rgb(0 0 0 / 55%), rgb(0 0 0 / 5%) 70%), url("${imageUrl ?? lubumbashiImage}")`,
       }}
     />
   );
@@ -54,7 +54,7 @@ export function ListingCard({ l }: { l: Listing }) {
       params={{ id: l.id }}
       className="fade-up group flex items-center gap-4 bg-card/90 p-3.5 focus-visible:outline-2 focus-visible:outline-ring"
     >
-      <PhotoSlot label={l.name} className="h-24 w-24 shrink-0" />
+      <PhotoSlot label={l.name} imageUrl={l.imageUrl} className="h-24 w-24 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

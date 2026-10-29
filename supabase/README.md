@@ -1,7 +1,7 @@
 # Base de données — Lubumbashi Connect
 
 Le schéma PostgreSQL de l'application est versionné dans `supabase/migrations/`.
-Il se compose de dix-huit migrations, à appliquer dans l'ordre chronologique :
+Il se compose de dix-neuf migrations, à appliquer dans l'ordre chronologique :
 
 - `20261022090000_directory_foundation.sql` : catégories, fiches, horaires,
   coordonnées, provenance, consentement professionnel, vérification, audit et
@@ -55,6 +55,8 @@ Il se compose de dix-huit migrations, à appliquer dans l'ordre chronologique :
   des fiches dans les détails publics afin d’afficher l’attribution OpenStreetMap.
   Les données OpenStreetMap sont sous licence ODbL. Les fiches importées peuvent
   manquer de contacts et d’horaires; confirmer ces détails avant de les compléter.
+- `20261029150000_public_listing_photos.sql` : expose la photo principale des
+  fiches publiques et permet d’afficher une image propre à chaque établissement.
 
 La première migration insère les catégories et sous-catégories nécessaires à
 l'annuaire, mais ne crée aucune fiche fictive. La migration de nettoyage
@@ -261,14 +263,16 @@ Pour activer cette fonctionnalité après la création du projet Supabase :
 4. Déployer la fonction et configurer son origine :
 
    ```sh
-   supabase secrets set ALLOWED_ORIGINS="https://ton-domaine.cd,https://www.ton-domaine.cd,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173"
+   supabase secrets set ALLOWED_ORIGINS="https://annuaire-page-jaune.vercel.app,https://ton-domaine.cd,https://www.ton-domaine.cd,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173"
    supabase functions deploy device-analytics --no-verify-jwt
    supabase functions deploy admin-users
    ```
 
-   Ajouter aussi les origines locales nécessaires à `ALLOWED_ORIGINS` pendant
-   le développement, en particulier l'origine exacte utilisée par le site
-   (par exemple `http://localhost:8080`). Le drapeau
+   Les domaines de production doivent être renseignés exactement, sans chemin
+   ni barre oblique finale. La fonction autorise aussi ce domaine Vercel de
+   production par défaut; ajoute les origines exactes des déploiements preview
+   dans `ALLOWED_ORIGINS` si nécessaire. Ajouter les origines locales requises
+   pendant le développement (par exemple `http://localhost:8080`). Le drapeau
    `--no-verify-jwt` est nécessaire pour que la passerelle laisse passer le
    précontrôle CORS `OPTIONS`; la fonction vérifie ensuite elle-même
    l'authentification et le rôle `admin` sur les lectures `GET`. Le secret

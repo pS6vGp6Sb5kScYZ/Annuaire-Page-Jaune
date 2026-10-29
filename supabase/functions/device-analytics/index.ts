@@ -4,6 +4,7 @@ const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .filter(Boolean);
 const allowedOrigins = new Set([
   ...configuredOrigins,
+  "https://annuaire-page-jaune.vercel.app",
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://localhost:5173",
@@ -18,7 +19,7 @@ function isAllowedOrigin(origin: string | null) {
     const parsed = new URL(origin);
     const hostname = parsed.hostname.toLowerCase();
     if (hostname === "localhost" || hostname === "127.0.0.1") return true;
-    return hostname.endsWith(".vercel.app") || hostname.endsWith(".vercel-preview.com");
+    return false;
   } catch {
     return false;
   }
